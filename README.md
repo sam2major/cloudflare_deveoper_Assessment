@@ -130,7 +130,7 @@ npx wrangler r2 bucket create image-assets
 ``````
 
 ## Configuration (wrangler.jsonc)
-Note: Critical note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match TypeScript interface exactly.
+Note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match TypeScript interface exactly.
 ``````sh
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -340,7 +340,7 @@ async function handleIngest(
 ``````
 
 ## Pre-Deployment:
-ChecklistBefore deploying, verify all components are ready:
+Checklist Before deploying, verify all components are ready:
 ``````sh
 pwd
 cd image-processor
