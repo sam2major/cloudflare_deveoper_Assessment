@@ -132,7 +132,8 @@ npx wrangler r2 bucket create image-assets
 ``````
 
 ## Configuration (wrangler.jsonc)
-Note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match TypeScript interface exactly. Removed wrangler.toml and created wrangler.jsonc for comments and readability (supported per latest Wrangler config docs).
+Note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match TypeScript interface exactly. Per the latest Wrangler updates, we use wrangler.jsonc to allow comments and stricter JSON validation.
+
 ``````sh
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -163,7 +164,7 @@ Note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match Typ
 ``````
 
 ## Database Schema (schema.sql)
-
+We create a local schema.sql file:
 ``````sh
 DROP TABLE IF EXISTS images;
 
