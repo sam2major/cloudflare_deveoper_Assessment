@@ -31,8 +31,8 @@ The image processing service follows this request flow:
 1. **Client requests image** via `GET /images/{key}`
 
 2. **Cache check** at Cloudflare global edge
-   - **HIT**: Immediate response with cached image and `X-Alt-Text` header (~10-50ms)
-   - **MISS**: Proceed to Worker execution
+   - **HIT(Data is available)**: Immediate response with cached image and `X-Alt-Text` header (~10-50ms)
+   - **MISS(Data is not available)**: Proceed to Worker execution
 
 3. **Worker execution** (on cache miss)
    - Query D1 for existing alt-text
