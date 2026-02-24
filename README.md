@@ -132,7 +132,7 @@ npx wrangler r2 bucket create image-assets
 ``````
 
 ## Configuration (wrangler.jsonc)
-Note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match TypeScript interface exactly.
+Note: Binding names (IMAGE_BUCKET, DB, AI) are case-sensitive and must match TypeScript interface exactly. Removed wrangler.toml and created wrangler.jsonc for comments and readability (supported per latest Wrangler config docs).
 ``````sh
 {
   "$schema": "node_modules/wrangler/config-schema.json",
