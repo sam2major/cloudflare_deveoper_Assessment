@@ -1,6 +1,7 @@
 # Image Processor: Edge-Based Accessibility Solution
 
-A Cloudflare Workers implementation that automatically generates and serves alt-text for images at the edge, combining R2 storage, D1 database, and Workers AI with global caching.
+This report details the architecture, implementation, and engineering decisions behind a serverless image processing pipeline built on the Cloudflare Developer Platform. The solution leverages Workers, R2 Object Storage, D1 SQL Database, and Workers AI to serve images with automatically generated alt-text.
+A core focus of this engineering effort was the implementation of a robust Cache-Aside (Lazy Loading) strategy combined with Write-Behind patterns for metadata persistence. This approach ensures low-latency delivery for end-users while optimizing costs by minimizing redundant AI inference calls ("Neuron" usage) and database writes.
 
 ## Architecture Overview
 
@@ -10,30 +11,17 @@ The architecture is deliberately minimal: a single Worker acts as the edge gatew
 ### System Components
 
 ```mermaid
-graph TB
-    User[User Request Global] --> Edge[Cloudflare Edge Network<br/>300+ Locations]
-    
-    subgraph Edge [Cloudflare Edge Network]
-        Cache[Cloudflare Cache API<br/>L1 Cache]
-        Worker[Cloudflare Worker<br/>TypeScript]
+graph TD
+    A[Client Request] --> B{Cache Check}
+    B -->|MISS| C[Fetch from R2]
+    B -->|HIT| D[Return Cached Image]
+    C --> E{Metadata in D1?}
+    E -->|No| F[Workers AI Inference]
+    F --> G[Store in D1]
+    G --> H[Cache Response]
+    E -->|Yes| H
+    H --> I[Return Image + Alt-Text Header]
         
-        Cache -->|HIT: 10-50ms| User
-        Cache -->|MISS| Worker
-        
-        Worker --> D1[D1 Database]
-        Worker --> R2[R2 Bucket]
-        Worker --> AI[Workers AI]
-    end
-    
-    style User fill:#2d1b3a,stroke:#b388ff,stroke-width:3px,color:#ffffff
-    style Edge fill:#1a2b3c,stroke:#64b5f6,stroke-width:3px,color:#ffffff
-    style Cache fill:#3e2a1f,stroke:#ffb74d,stroke-width:2px,color:#ffffff
-    style Worker fill:#1b3b1b,stroke:#81c784,stroke-width:2px,color:#ffffff
-    style D1 fill:#2c3e50,stroke:#90caf9,stroke-width:2px,color:#ffffff
-    style R2 fill:#2c3e50,stroke:#90caf9,stroke-width:2px,color:#ffffff
-    style AI fill:#2c3e50,stroke:#90caf9,stroke-width:2px,color:#ffffff
-    
-    linkStyle 0,1,2,3,4,5 stroke:#90caf9,stroke-width:2px
 ```
 
 ## Core Data Flow
@@ -89,21 +77,35 @@ The architecture decouples image storage from metadata using a foreign key relat
 
 ✅ AI inference occurs exactly once per unique image key, preventing redundant processing
 
-## Key Architectural Rationale
-#### Single Worker: 
-One entry point serving as the unified request handler, which simplifies deployment, reduces complexity, and makes debugging more straightforward since all logic lives in a single codebase.
+## Architecture & Rationale
+### High-Level Design
+The system follows an edge-native architecture where logic executes closest to the user:
 
-#### Cache-first design: 
-By checking the edge cache before any computation, 99%+ of requests never reach the worker, dramatically reducing execution costs and latency while maximizing Cloudflare's global network benefits.
+#### 1. Request Ingestion:
+A Cloudflare Worker intercepts requests for images.
 
-#### D1 persistence: 
-Storing generated alt-text in D1 prevents redundant AI inference calls, ensuring efficient use of Workers AI free tier limits while maintaining fast access to previously computed metadata.
+#### 2. Cache Lookup (Edge): 
+The worker checks the global Cloudflare Cache API.
+- Hit: Serve the image and cached headers immediately.
+- Miss: Proceed to origin logic.
 
-#### Non-blocking operations: 
-Image delivery is never delayed by AI processing. The worker returns the image immediately while background operations handle alt-text generation, providing the best possible user experience.
+#### 3. Origin Logic (R2 + D1):
+- Fetch the image binary from R2.
+- Check D1 for existing metadata (alt-text).
+- If missing: Invoke Workers AI (@cf/meta/llama-3.2-11b-vision-instruct or similar vision model) to generate description.
 
-#### TypeScript implementation: 
-Strong typing ensures compile-time validation of Cloudflare bindings and worker logic, reducing runtime errors and improving developer experience with better IDE support.
+#### 4. Persistence Strategy:
+- Image + Headers are cached at the edge.
+- New metadata is written to D1 asynchronously (Write-Behind) to avoid blocking the response.
+
+## Why This Architecture?
+### Cost Efficiency: 
+AI inference is expensive. By caching the final response (image + headers) and persisting results in D1, we ensure each unique image is processed by AI exactly once.
+
+### Latency: 
+Serving from the Edge Cache reduces Time-to-First-Byte (TTFB) to milliseconds for repeat visits.
+### Scalability: 
+R2 and D1 scale automatically without provisioning servers.
 
 ## Implementation
 Project Setup
@@ -968,6 +970,27 @@ cf-ray: 9cea3dc8b918e6de-LIS
 - Cache hit rate: 99.9% vs 95% target
 
 ---
+## Caching Strategy Analysis
+For this assessment, I implemented a hybrid approach primarily rooted in Cache-Aside (Lazy Loading), supported by Write-Behind mechanics.
+
+### Primary Strategy: Cache-Aside (Lazy Loading)
+Reference: Cache Strategies Guide as below.
+
+#### Implementation: 
+The Worker explicitly checks the Cloudflare Edge Cache (caches.default) before attempting any backend logic (R2/D1/AI).
+#### Why chosen?
+- Control: Unlike Read-Through, Cache-Aside gives us granular control over what gets cached. We only cache successful responses containing the image and the generated header.
+- Fault Tolerance: If the AI service or D1 is temporarily unavailable, the application can potentially serve stale content (if configured) or fail gracefully without taking down the cache layer.
+- Efficiency: It prevents "cache pollution" by only storing data that is actually requested by users.
+
+## Secondary Strategy: Write-Behind (Asynchronous Persistence)
+Reference: Same source
+
+### Implementation: 
+When a cache miss occurs and AI generates new text, the response is sent to the user immediately. The database update (ctx.waitUntil(saveMetadata...)) happens asynchronously in the background.
+### Why chosen?
+- Performance: Writing to D1 adds latency. By decoupling the write from the read path, we ensure the user experiences the fastest possible image load time.
+- Consistency Model: We accept "Eventual Consistency" for the database record. It is acceptable if the D1 row appears 100ms after the user receives the image, as the user already received the correct data in the HTTP header.
 
 ## References
 
@@ -980,4 +1003,4 @@ All documentation sources are official Cloudflare resources:
 - [Wrangler CLI Reference](https://developers.cloudflare.com/workers/wrangler/)
 - [Cache API Documentation](https://developers.cloudflare.com/workers/runtime-apis/cache/)
 - [Wrangler Configuration Guide](https://developers.cloudflare.com/workers/wrangler/configuration/)
-
+- https://dev.to/jaiminbariya/cache-strategies-a-complete-guide-with-real-life-examples-416p?spm=a2ty_o01.29997173.0.0.24175171LkQ5qG
