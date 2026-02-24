@@ -13,8 +13,8 @@ The architecture is deliberately minimal: a single Worker acts as the edge gatew
 ```mermaid
 graph TD
     A[Client Request] --> B{Cache Check}
-    B -->|MISS| C[Fetch from R2]
-    B -->|HIT| D[Return Cached Image]
+    B -->|MISS: Data not found| C[Fetch from R2]
+    B -->|HIT: Data Found| D[Return Cached Image]
     C --> E{Metadata in D1?}
     E -->|No| F[Workers AI Inference]
     F --> G[Store in D1]
@@ -84,10 +84,10 @@ The system follows an edge-native architecture where logic executes closest to t
 #### 1. Request Ingestion:
 A Cloudflare Worker intercepts requests for images.
 
-#### 2. Cache Lookup (Edge): 
+#### 2. Cache Lookup (Edge Server): 
 The worker checks the global Cloudflare Cache API.
-- Hit: Serve the image and cached headers immediately.
-- Miss: Proceed to origin logic.
+- Hit(Data is available): occurs when requested data is successfully found in the cache, allowing for fast retrieval of image data. Serve the image and cached headers immediately.
+- Miss(Data is not found): happens when the data is not in the cache, forcing a slower retrieval from the main memory or database. Proceed to origin logic.
 
 #### 3. Origin Logic (R2 + D1):
 - Fetch the image binary from R2.
