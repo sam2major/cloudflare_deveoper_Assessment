@@ -203,8 +203,8 @@ npx wrangler r2 object put image-assets/lisbon-city.png --file=../lisbon-city.pn
 npx wrangler r2 object put image-assets/mangrove.jpg --file=../mangrove.jpg --remote
 
 ``````
-## Worker development (src/index.ts)
-Core implementation with single TypeScript fetch handler:
+## Worker development or Core Worker Logic (src/index.ts)
+This implementation demonstrates the Cache-Aside pattern for reads and Write-Behind for database updates.Core implementation with single TypeScript fetch handler:
 
 ###### Note: 
 The following code is abbreviated for report readability. For the complete implementation with all helper functions, error handling, and type definitions, please see the attached `src/index.ts` file.
