@@ -150,7 +150,8 @@ async function handleImageRequest(
     );
   }
 
-  // Check cache first
+   // 2. CACHE-ASIDE STRATEGY (Read Path)
+    // Check Cloudflare Global Cache first
   const cacheKey = new Request(request.url, request);
   const cache = caches.default;
 
